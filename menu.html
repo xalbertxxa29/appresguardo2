@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Menú Principal</title>
+  <link rel="stylesheet" href="menu.css" />
+</head>
+<body>
+  <div class="menu-container">
+
+    <!-- Sirena estroboscópica arriba del saludo -->
+    <div class="status-wrapper">
+      <span class="siren"></span>
+      <h2 id="status-message">
+        <span class="welcome-text">Cargando registros...</span>
+      </h2>
+    </div>
+
+    <div class="menu-buttons">
+      <!-- CHECK LIST -->
+      <button class="menu-button" id="checklist-btn">
+        <span class="icon">✅</span>
+        <span class="text">CHECK LIST</span>
+      </button>
+
+      <!-- PLAN DE EJERCICIOS -->
+      <button class="menu-button" id="plan-ejercicios-btn">
+        <span class="icon">🏋️‍♂️</span>
+        <span class="text">PLAN DE EJERCICIOS</span>
+      </button>
+
+      <!-- CONTACTOS DE EMERGENCIA -->
+      <button class="menu-button" id="contactos-btn">
+        <span class="icon">📞</span>
+        <span class="text">CONTACTOS DE EMERGENCIA</span>
+      </button>
+
+      <!-- EVIDENCIA DE EJERCICIOS -->
+      <button class="menu-button" id="evidencia-ejercicios-btn">
+        <span class="icon">📸</span>
+        <span class="text">Evidencia de Ejercicios</span>
+      </button>
+
+      <!-- REPORTE DE INCIDENCIAS -->
+      <button class="menu-button" id="reporte-incidencias-btn">
+        <span class="icon">📝</span>
+        <span class="text">Reporte de Incidencias</span>
+      </button>
+
+      <!-- CERRAR SESIÓN -->
+      <button class="menu-button" id="logout-btn">
+        <span class="icon">🔒</span>
+        <span class="text">Cerrar Sesión</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+     navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    }
+  </script>
+  <!-- Tu configuración de Firebase -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Escucha Firestore para actualizar color de sirena en tiempo real -->
+  <script>
+    const db = firebase.firestore();
+    function applySirenColor(hex) {
+      document.documentElement.style.setProperty('--siren-color', hex);
+      const c = hex.replace('#','');
+      const r = parseInt(c.substr(0,2),16),
+            g = parseInt(c.substr(2,2),16),
+            b = parseInt(c.substr(4,2),16);
+      document.documentElement.style.setProperty('--siren-rgb', `${r},${g},${b}`);
+    }
+    db.collection('settings').doc('siren')
+      .onSnapshot(doc => {
+        let color = '#00ff00'; // verde por defecto
+        if (doc.exists && doc.data().color) {
+          color = doc.data().color;
+        }
+        applySirenColor(color);
+      }, err => {
+        console.error('Error escuchando siren:', err);
+        applySirenColor('#00ff00');
+      });
+  </script>
+
+  <!-- Lógica del menú -->
+  <script src="menu.js"></script>
+</body>
+</html>
