@@ -1,12 +1,14 @@
-// script.js
-// Manejo de login con “Recordarme” para email y contraseña
-
+// script.js — Login con autologin, “Recordarme” y color de sirena
 document.addEventListener("DOMContentLoaded", () => {
-  // ——— Inicializar Firebase ———
-  const auth = firebase.auth();
-  const db   = firebase.firestore();
+  // ===== Firebase (usa la instancia de firebase-config.js) =====
+  const fb   = window.firebase || firebase;
+  const auth = window.auth     || fb.auth();
+  const db   = window.db       || fb.firestore();
 
-  // ——— Función para aplicar color de sirena y guardar en localStorage ———
+  // Asegura persistencia LOCAL (la sesión no se cierra hasta signOut)
+  try { auth.setPersistence(fb.auth.Auth.Persistence.LOCAL); } catch (_) {}
+
+  // ===== Sirena (realtime + fallback localStorage) =====
   function applySirenColor(hex) {
     document.documentElement.style.setProperty('--siren-color', hex);
     const c = hex.replace('#','');
@@ -16,25 +18,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.documentElement.style.setProperty('--siren-rgb', `${r},${g},${b}`);
     localStorage.setItem('sirenColor', hex);
   }
+  db.collection('settings').doc('siren').onSnapshot(doc => {
+    const saved = localStorage.getItem('sirenColor') || '#00ff00';
+    applySirenColor((doc.exists && doc.data().color) ? doc.data().color : saved);
+  }, () => {
+    applySirenColor(localStorage.getItem('sirenColor') || '#00ff00');
+  });
 
-  // ——— Suscripción en tiempo real a Firestore ———
-  db.collection('settings').doc('siren')
-    .onSnapshot(doc => {
-      let color = '#00ff00'; // verde por defecto
-      if (doc.exists && doc.data().color) {
-        color = doc.data().color;
-      } else {
-        const saved = localStorage.getItem('sirenColor');
-        if (saved) color = saved;
-      }
-      applySirenColor(color);
-    }, err => {
-      console.error("Error escuchando siren en Firestore:", err);
-      const saved = localStorage.getItem('sirenColor') || '#00ff00';
-      applySirenColor(saved);
-    });
-
-  // ——— Captura elementos del DOM ———
+  // ===== DOM =====
   const loginForm        = document.getElementById("login-form");
   const loginBtn         = document.getElementById("login-btn");
   const loadingOverlay   = document.getElementById("loadingOverlay");
@@ -46,70 +37,83 @@ document.addEventListener("DOMContentLoaded", () => {
   const rememberCheckbox = document.getElementById("remember");
   const togglePassword   = document.getElementById("togglePassword");
 
-  if (!loginForm) {
-    console.error("❌ No se encontró #login-form en el DOM");
-    return;
-  }
+  const lockUI = () => {
+    if (!loginForm) return;
+    usernameInput.disabled = true;
+    passwordInput.disabled = true;
+    loginBtn.disabled      = true;
+    loadingOverlay.hidden  = false;
+  };
+  const unlockUI = () => {
+    if (!loginForm) return;
+    usernameInput.disabled = false;
+    passwordInput.disabled = false;
+    loginBtn.disabled      = false;
+    loadingOverlay.hidden  = true;
+  };
 
-  // ——— Estado inicial ———
+  // ===== AUTOLOGIN (clave) =====
+  // Bloquea la UI y espera el primer onAuthStateChanged: si hay sesión, redirige directo
+  lockUI();
+  let firstAuthEventHandled = false;
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      window.location.replace("menu.html");
+      return;
+    }
+    // No hay sesión -> mostrar login
+    if (!firstAuthEventHandled) {
+      unlockUI();
+      firstAuthEventHandled = true;
+    }
+  });
+
+  // ===== Estado inicial del formulario =====
+  if (!loginForm) return; // este script sólo vive en la página de login
   loginForm.reset();
-  usernameInput.disabled = false;
-  passwordInput.disabled = false;
-  loginBtn.disabled     = false;
-  loadingOverlay.hidden = true;
   errorModal.style.display = "none";
 
-  // ——— Prefill “Recordarme” ———
-  const rememberedEmail = localStorage.getItem("rememberedEmail");
-  const rememberedPwd   = localStorage.getItem("rememberedPassword");
-  if (rememberedEmail && rememberedPwd) {
-    usernameInput.value      = rememberedEmail;
-    passwordInput.value      = rememberedPwd;
-    rememberCheckbox.checked = true;
-  } else if (rememberedEmail) {
-    // Si solo email existe
-    usernameInput.value      = rememberedEmail;
+  // ===== Prefill “Recordarme” =====
+  const remEmail = localStorage.getItem("rememberedEmail");
+  const remPwd   = localStorage.getItem("rememberedPassword");
+  if (remEmail) {
+    usernameInput.value = remEmail;
     rememberCheckbox.checked = true;
   }
+  if (remEmail && remPwd) {
+    passwordInput.value = remPwd;
+  }
 
-  // ——— Toggle visibilidad de la contraseña ———
-  togglePassword.addEventListener("click", () => {
+  // ===== Mostrar/Ocultar contraseña =====
+  togglePassword?.addEventListener("click", () => {
     const isPwd = passwordInput.type === "password";
     passwordInput.type = isPwd ? "text" : "password";
     togglePassword.style.transform = isPwd ? "rotate(180deg)" : "rotate(0)";
-    togglePassword.setAttribute(
-      "aria-label",
-      isPwd ? "Ocultar contraseña" : "Mostrar contraseña"
-    );
+    togglePassword.setAttribute("aria-label", isPwd ? "Ocultar contraseña" : "Mostrar contraseña");
   });
 
-  // ——— Cerrar modal de error ———
-  modalClose.addEventListener("click", () => {
-    errorModal.style.display = "none";
-  });
-  errorModal.addEventListener("click", e => {
-    if (e.target === errorModal) {
-      errorModal.style.display = "none";
-    }
-  });
+  // ===== Modal de error =====
+  const showError = (text) => {
+    modalMessage.textContent = text;
+    errorModal.style.display  = "flex";
+    modalClose?.focus();
+  };
+  modalClose?.addEventListener("click", () => errorModal.style.display = "none");
+  errorModal?.addEventListener("click", e => { if (e.target === errorModal) errorModal.style.display = "none"; });
 
-  // ——— Manejo del submit ———
-  loginForm.addEventListener("submit", async e => {
+  // ===== Login normal =====
+  loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    errorModal.style.display = "none";
     modalMessage.textContent = "";
-    errorModal.style.display  = "none";
 
-    const email    = usernameInput.value.trim();
-    const password = passwordInput.value.trim();
+    const email    = (usernameInput.value || "").trim();
+    const password = (passwordInput.value || "").trim();
 
-    if (!email || !password) {
-      return showModal("Completa todos los campos.");
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return showModal("Ingresa un correo válido.");
-    }
+    if (!email || !password) return showError("Completa todos los campos.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError("Ingresa un correo válido.");
 
-    // ——— Guardar o limpiar "Recordarme" ———
+    // Recordarme
     if (rememberCheckbox.checked) {
       localStorage.setItem("rememberedEmail", email);
       localStorage.setItem("rememberedPassword", password);
@@ -118,31 +122,23 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.removeItem("rememberedPassword");
     }
 
-    loginBtn.disabled     = true;
-    loadingOverlay.hidden = false;
-
+    lockUI();
     try {
       await auth.signInWithEmailAndPassword(email, password);
-      window.location.href = "menu.html";
+      // onAuthStateChanged hará el redirect; dejamos un fallback por si tarda:
+      setTimeout(() => {
+        if (auth.currentUser) window.location.replace("menu.html");
+      }, 500);
     } catch (error) {
-      loadingOverlay.hidden = true;
-      loginBtn.disabled     = false;
-
+      unlockUI();
       const code = error.code;
       const msg =
         ["auth/user-not-found","auth/wrong-password","auth/invalid-credential"].includes(code)
           ? "Usuario o contraseña incorrectos."
           : code === "auth/too-many-requests"
             ? "Demasiados intentos. Intenta más tarde."
-            : error.message;
-
-      showModal(msg);
+            : error.message || "No se pudo iniciar sesión.";
+      showError(msg);
     }
   });
-
-  function showModal(text) {
-    modalMessage.textContent = text;
-    errorModal.style.display  = "flex";
-    modalClose.focus();
-  }
 });
