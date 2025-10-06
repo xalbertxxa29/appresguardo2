@@ -2,104 +2,140 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Liderman Resguardo</title>
+
   <meta name="description" content="Seguridad de personal de Resguardo Liderman." />
   <meta name="keywords" content="Liderman, Alarmas, Login, Dashboard, Seguridad" />
-  <meta name="author" content="Liderman tecnologia" />
+  <meta name="author" content="Liderman tecnología" />
+  <meta name="theme-color" content="#003366" />
   <link rel="canonical" href="https://tu-sitio-web.com/"/>
+
   <link rel="stylesheet" href="styles.css"/>
 
-  <!-- Ocultar clear nativo & reforzar 'Recordarme' -->
+  <!-- Pequeños ajustes de UI -->
   <style>
+    /* Evita el botón nativo de limpiar/mostrar password en algunos navegadores */
     input::-ms-clear,
     input::-ms-reveal,
     input::-webkit-search-decoration,
     input::-webkit-search-cancel-button,
     input::-webkit-search-results-button,
-    input::-webkit-search-results-decoration {
-      display: none;
-    }
-    .remember-me {
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      margin-bottom: 1.5rem;
-    }
-    .remember-me label {
-      color: #333;
-      font-weight: bold;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    /* Mover la sirena justo encima del mensaje */
-    .login-title {
-      position: relative;
-      display: inline-block;
-    }
-    .login-title .siren {
-      position: absolute;
-      top: -8px;
-      right: -12px;
-    }
+    input::-webkit-search-results-decoration { display: none; }
+
+    .remember-me{ display:flex; align-items:center; gap:.5rem; margin-bottom:1.5rem; }
+    .remember-me label{ color:#333; font-weight:600; font-size:1rem; cursor:pointer; }
+
+    /* Sirena pegada al texto */
+    .login-title{ position:relative; display:inline-block; }
+    .login-title .siren{ position:absolute; top:-8px; right:-12px; }
   </style>
 </head>
 <body>
-  <div class="login-container">
+  <noscript>
+    <div style="padding:12px; background:#ffefef; color:#b00020; text-align:center;">
+      Esta aplicación requiere JavaScript para funcionar.
+    </div>
+  </noscript>
+
+  <!-- Contenedor Login -->
+  <div class="login-container" aria-live="polite">
     <h1 class="login-title">
-      Liderman&nbsp;
-      <span class="resguardo-text">Resguardo</span>
-      <span class="siren"></span>
+      Liderman&nbsp;<span class="resguardo-text">Resguardo</span>
+      <span class="siren" aria-hidden="true"></span>
     </h1>
 
-    <div class="login-card">
-      <form id="login-form" aria-label="Formulario de inicio de sesión">
+    <div class="login-card" role="region" aria-label="Acceso">
+      <form id="login-form" aria-label="Formulario de inicio de sesión" autocomplete="on">
         <div class="input-group">
           <label for="username">Correo electrónico</label>
-          <input type="email" id="username" required placeholder=" ">
+          <input
+            type="email"
+            id="username"
+            inputmode="email"
+            required
+            placeholder=" "
+            autocomplete="username"
+            aria-required="true"
+          />
         </div>
+
         <div class="input-group password-field">
           <label for="password">Contraseña</label>
-          <input type="password" id="password" required placeholder=" ">
+          <input
+            type="password"
+            id="password"
+            required
+            placeholder=" "
+            autocomplete="current-password"
+            aria-required="true"
+          />
           <button type="button" id="togglePassword" aria-label="Mostrar contraseña">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
           </button>
         </div>
+
         <div class="remember-me">
-          <input type="checkbox" id="remember">
+          <input type="checkbox" id="remember" />
           <label for="remember">Recordarme</label>
         </div>
+
         <button id="login-btn" type="submit">Iniciar sesión</button>
       </form>
+
       <div class="links"><a href="#">Políticas de Privacidad</a></div>
       <div id="error-message" role="alert" aria-live="assertive"></div>
     </div>
   </div>
 
-  <div id="loadingOverlay" hidden>
-    <div class="spinner"></div>
+  <!-- Loader para autologin / espera de credenciales -->
+  <div id="loadingOverlay" hidden aria-hidden="true">
+    <div class="spinner" aria-label="Cargando…"></div>
   </div>
 
-  <div class="modal-overlay" id="errorModal" tabindex="-1">
-    <div class="modal-content">
+  <!-- Modal de error -->
+  <div class="modal-overlay" id="errorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalMessage">
       <button class="modal-close" id="modalClose" aria-label="Cerrar modal">&times;</button>
       <p id="modalMessage"></p>
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
+  <!-- ===== Firebase SDKs (Compat) ===== -->
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
-  <script src="firebase-config.js" defer></script>
+  <!-- (Opcional) Storage si lo usas en login: -->
+  <!-- <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-storage-compat.js"></script> -->
+
+  <!-- Tu configuración debe cargarse ANTES que script.js -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Registro normal del Service Worker para uso offline -->
   <script>
+    // Modo limpieza solo si llamas a index.html?resetSW=1 (no rompe el offline en uso normal)
+    (function resetSWIfRequested() {
+      if (location.search.includes('resetSW=1')) {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+        }
+        if (window.caches && caches.keys) {
+          caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+        }
+        console.warn('Service Worker y cachés borrados por ?resetSW=1. Recarga la página.');
+      }
+    })();
+
+    // Registro estándar del SW (no se ejecuta si antes hiciste reset y todavía no recargas)
     if ('serviceWorker' in navigator) {
-     navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
     }
   </script>
-  <script src="script.js" defer></script>
+
+  <!-- Lógica de login con autologin (usa loadingOverlay) -->
+  <script src="script.js"></script>
 </body>
 </html>
